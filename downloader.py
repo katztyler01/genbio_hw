@@ -71,25 +71,37 @@ class ENCODEDownloader:
         exp_data = response.json()
         files = exp_data.get("files", [])
 
-        idr_thresholded = []
-        idr_ranked = []
-        for f in files:
-            if f.get("output_type") in ["IDR thresholded peaks"] and f.get(
-                "file_type"
-            ).startswith("bed"):
-                idr_thresholded.append(f)
-            elif f.get("output_type") in ["IDR ranked peaks"] and f.get(
-                "file_type"
-            ).startswith("bed"):
-                idr_ranked.append(f)
+        if assay == "ATAC-seq":
+            idr_thresholded = []
+            idr_ranked = []
+            for f in files:
+                if f.get("output_type") in ["IDR thresholded peaks"] and f.get(
+                    "file_type"
+                ).startswith("bed"):
+                    idr_thresholded.append(f)
+                elif f.get("output_type") in ["IDR ranked peaks"] and f.get(
+                    "file_type"
+                ).startswith("bed"):
+                    idr_ranked.append(f)
 
-        if len(idr_thresholded) > 0:
-            files = idr_thresholded
-        elif len(idr_ranked) < 1:
-            print(f"No IDR thresholded or ranked peaks found for {exp_id}")
+            if len(idr_thresholded) > 0:
+                files = idr_thresholded
+            elif len(idr_ranked) < 1:
+                print(f"No IDR thresholded or ranked peaks found for {exp_id}")
+                return None
+            else:
+                files = idr_ranked
         else:
-            files = idr_ranked
-
+            idr_peak = []
+            for f in files:
+                if f.get("file_type") in ["bed idr_peak"]:
+                    idr_peak.append(f)
+            if len(idr_peak) > 0:
+                files = idr_peak
+            else:
+                print(f"No IDR peak files found for {exp_id}")
+                return None
+                    
         downloaded_files = []
         for file in files:
             file_url = f"{ENCODE_BASE_URL}{file['href']}"
@@ -147,6 +159,7 @@ class ENCODEDownloader:
             "replicates.library.biosample.donor.organism.scientific_name": "Homo sapiens",
             "frame": "embedded",
             "format": "json",
+            "assembly": "GRCh38",
             "audit.ERROR.category!": "extremely low read depth",
             "limit": n_experiments if n_experiments else "all",
         }

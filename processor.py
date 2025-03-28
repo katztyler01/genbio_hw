@@ -143,13 +143,12 @@ class ENCODEProcessor:
             os.makedirs(os.path.dirname(df_output))
 
         annotations = {}
-        annotations["organ_slims"] = metadata["biosample_ontology"]["organ_slims"]
-        annotations["system_slims"] = metadata["biosample_ontology"]["system_slims"]
-        annotations["biosample_class"] = metadata["biosample_ontology"][
-            "classification"
-        ]
-        annotations["assembly"] = metadata["assembly"]
-        annotations["assay"] = metadata["assay_title"]
+        annotations["cell_slims"] = metadata["biosample_ontology"].get("cell_slims", [])
+        annotations["organ_slims"] = metadata["biosample_ontology"].get("organ_slims", [])
+        annotations["system_slims"] = metadata["biosample_ontology"].get("system_slims", [])
+        annotations["biosample_class"] = metadata["biosample_ontology"].get("classification")
+        annotations["assembly"] = metadata.get("assembly")
+        annotations["assay"] = metadata.get("assay_title")
 
         peaks = BedTool(bed_file)
         peaks = peaks.slop(b=10000, g=self.chrom_sizes)
@@ -206,3 +205,6 @@ class ENCODEProcessor:
             df.to_parquet(df_output)
 
         return samples
+    
+    def process_experiments(self, experiment_files: List[Tuple[str, str]]):
+        pass
