@@ -50,12 +50,16 @@ class ENCODEDownloader:
                     f.write(chunk)
                     progress_bar.update(len(chunk))
 
-    def download_files(self, experiment: Dict, assay: str):
+    def download_experiment(self, experiment: Dict, assay: str):
         exp_id = experiment["@id"]
         save_dir = f"{self.output_dir}/experiments/{assay}"
         save_dir = os.path.join(save_dir, experiment["accession"])
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
+
+        metadata_file = os.path.join(save_dir, "metadata.json")
+        with open(metadata_file, "w") as file:
+            json.dump(experiment, file, indent=4)
 
         print(f"Experiment: {exp_id}")
         exp_url = f"{ENCODE_BASE_URL}{exp_id}"
@@ -132,35 +136,7 @@ class ENCODEDownloader:
                 with open(fa_file[:-3], "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
 
-    def get_gene_db(
-        self, gtf_file="encode_data/genomes/GRCh38_v24.gtf.gz", db_file=None
-    ):
-        if db_file is None:
-            db_file = ":memory:"
-        elif os.path.exists(db_file):
-            try:
-                print(f"Loading existing database from {db_file}...")
-                db = gffutils.FeatureDB(db_file)
-                print("Database loaded successfully")
-                return db
-            except Exception as e:
-                print(f"Error loading database: {e}")
-
-        print("Creating new database...")
-        db = gffutils.create_db(
-            gtf_file,
-            db_file,
-            force=True,
-            keep_order=True,
-            merge_strategy="merge",
-            sort_attribute_values=True,
-            disable_infer_genes=True,
-            disable_infer_transcripts=True,
-        )
-
-        return db
-
-    def download_experiments(self, assay: str, n_experiments: Optional[int] = None):
+    def find_experiments(self, assay: str, n_experiments: Optional[int] = None):
         assert assay in ["ATAC-seq", "CAGE"], (
             "Assay must be either 'CAGE' or 'ATAC-seq'"
         )
@@ -169,7 +145,7 @@ class ENCODEDownloader:
             "type": "Experiment",
             "assay_title": assay,
             "replicates.library.biosample.donor.organism.scientific_name": "Homo sapiens",
-            "frame": "object",
+            "frame": "embedded",
             "format": "json",
             "audit.ERROR.category!": "extremely low read depth",
             "limit": n_experiments if n_experiments else "all",
@@ -179,5 +155,5 @@ class ENCODEDownloader:
 
         experiments = self.search_encode(params)
         for exp in experiments:
-            self.download_files(exp, assay)
+            self.download_experiment(exp, assay)
         return
