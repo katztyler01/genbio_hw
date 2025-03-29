@@ -54,12 +54,6 @@ class ENCODEDownloader:
         exp_id = experiment["@id"]
         save_dir = f"{self.output_dir}/experiments/{assay}"
         save_dir = os.path.join(save_dir, experiment["accession"])
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        metadata_file = os.path.join(save_dir, "metadata.json")
-        with open(metadata_file, "w") as file:
-            json.dump(experiment, file, indent=4)
 
         print(f"Experiment: {exp_id}")
         exp_url = f"{ENCODE_BASE_URL}{exp_id}"
@@ -101,6 +95,13 @@ class ENCODEDownloader:
             else:
                 print(f"No IDR peak files found for {exp_id}")
                 return None
+        
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        metadata_file = os.path.join(save_dir, "metadata.json")
+        with open(metadata_file, "w") as file:
+            json.dump(experiment, file, indent=4)
                     
         downloaded_files = []
         for file in files:
@@ -163,6 +164,7 @@ class ENCODEDownloader:
             "audit.ERROR.category!": "extremely low read depth",
             "limit": n_experiments if n_experiments else "all",
         }
+        
         if assay == "ATAC-seq":
             params["audit.NOT_COMPLIANT.category!"] = "low FRiP score"
 

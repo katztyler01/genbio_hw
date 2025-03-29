@@ -7,6 +7,9 @@ from uniprot import UniprotAPI
 import json
 import copy
 import pandas as pd
+import multiprocessing
+from functools import partial 
+import pickle
 
 
 class ENCODEProcessor:
@@ -17,6 +20,7 @@ class ENCODEProcessor:
         db: str,
         annotation: str,
         chrom_sizes: str,
+        ensembl_to_uniprot: Optional[str] = None,
     ) -> None:
         self.output_dir = output_dir
         self.annotation = annotation
@@ -37,6 +41,8 @@ class ENCODEProcessor:
         self.transcript_to_gene, self.gene_to_transcripts = (
             self.get_transcript_gene_mapping()
         )
+        self.ensembl_to_uniprot_pkl = ensembl_to_uniprot
+        
 
     def get_gene_db(
         self, gtf_file="encode_data/genomes/GRCh38_v24.gtf.gz", db_file=None
@@ -89,7 +95,21 @@ class ENCODEProcessor:
         # NOTE: code adapted from UniProt API docs https://www.uniprot.org/help/id_mapping
         uniprot_api = UniprotAPI()
         ensembl_to_uniprot = {}
-
+        
+        if self.ensembl_to_uniprot_pkl and os.path.exists(self.ensembl_to_uniprot_pkl):
+            with open(self.ensembl_to_uniprot_pkl, "rb") as f:
+                ensembl_to_uniprot = pickle.load(f)
+        
+            transcript_ids = [tid for tid in transcript_ids if tid.split(".")[0] not in ensembl_to_uniprot]
+            n_gene_ids = 0
+            if gene_ids:
+                gene_ids = [gid for gid in gene_ids if gid.split(".")[0] not in ensembl_to_uniprot]
+                n_gene_ids = len(gene_ids)
+                
+            total_ids = len(transcript_ids) + n_gene_ids
+            if total_ids == 0:
+                return ensembl_to_uniprot
+            
         batch_size = 50000
         for i in range(0, len(transcript_ids), batch_size):
             batch = transcript_ids[i : i + batch_size]
@@ -129,10 +149,15 @@ class ENCODEProcessor:
                     gene_id = result["from"]
                     uniprot_id = result["to"]["primaryAccession"]
                     ensembl_to_uniprot[gene_id] = uniprot_id
-
+                    
+        if self.ensembl_to_uniprot_pkl and not os.path.exists(self.ensembl_to_uniprot_pkl):
+            with open(self.ensembl_to_uniprot_pkl, "wb") as f:
+                pickle.dump(ensembl_to_uniprot, f)
+                
         return ensembl_to_uniprot
 
-    def process_bed(self, bed_file: str, metadata_file: str) -> List[Dict[str, Any]]:
+    def process_exp(self, args) -> Optional[List[Dict[str, Any]]]:
+        bed_files, metadata_file = args
         with open(metadata_file, "r") as file:
             metadata = json.load(file)
 
@@ -150,7 +175,13 @@ class ENCODEProcessor:
         annotations["assembly"] = metadata.get("assembly")
         annotations["assay"] = metadata.get("assay_title")
 
-        peaks = BedTool(bed_file)
+        peaks = BedTool(bed_files[0])
+        for i, bed_file in enumerate(bed_files):
+            if i == 0:
+                continue
+            bed = BedTool(bed_file)
+            peaks = peaks.cat(bed, postmerge=False)
+            
         peaks = peaks.slop(b=10000, g=self.chrom_sizes)
         peaks = peaks.sort().merge()
         peak_gene_intersect = peaks.intersect(self.genes_bed, loj=True)
@@ -201,10 +232,18 @@ class ENCODEProcessor:
             sample["uniprot_ids"] = list(uniprot_ids)
             samples.append(sample)
 
-            df = pd.DataFrame(samples)
-            df.to_parquet(df_output)
+        df = pd.DataFrame(samples)
+        df.to_parquet(df_output)
 
-        return samples
+        #return samples
+        return
     
-    def process_experiments(self, experiment_files: List[Tuple[str, str]]):
-        pass
+    def process_experiments(self, experiment_files: List[Tuple[List[str], str]], n_workers: Optional[int] = 1) -> None:
+        if n_workers is None:
+            n_workers = multiprocessing.cpu_count()
+        
+        bound_process_exp = partial(self.process_exp)
+        
+        with multiprocessing.Pool(processes=n_workers) as pool:
+            pool.map(bound_process_exp, experiment_files)
+        
