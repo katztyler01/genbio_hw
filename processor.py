@@ -8,7 +8,7 @@ import json
 import copy
 import pandas as pd
 import multiprocessing
-from functools import partial 
+from functools import partial
 import pickle
 
 
@@ -42,7 +42,6 @@ class ENCODEProcessor:
             self.get_transcript_gene_mapping()
         )
         self.ensembl_to_uniprot_pkl = ensembl_to_uniprot
-        
 
     def get_gene_db(
         self, gtf_file="encode_data/genomes/GRCh38_v24.gtf.gz", db_file=None
@@ -95,21 +94,29 @@ class ENCODEProcessor:
         # NOTE: code adapted from UniProt API docs https://www.uniprot.org/help/id_mapping
         uniprot_api = UniprotAPI()
         ensembl_to_uniprot = {}
-        
+
         if self.ensembl_to_uniprot_pkl and os.path.exists(self.ensembl_to_uniprot_pkl):
             with open(self.ensembl_to_uniprot_pkl, "rb") as f:
                 ensembl_to_uniprot = pickle.load(f)
-        
-            transcript_ids = [tid for tid in transcript_ids if tid.split(".")[0] not in ensembl_to_uniprot]
+
+            transcript_ids = [
+                tid
+                for tid in transcript_ids
+                if tid.split(".")[0] not in ensembl_to_uniprot
+            ]
             n_gene_ids = 0
             if gene_ids:
-                gene_ids = [gid for gid in gene_ids if gid.split(".")[0] not in ensembl_to_uniprot]
+                gene_ids = [
+                    gid
+                    for gid in gene_ids
+                    if gid.split(".")[0] not in ensembl_to_uniprot
+                ]
                 n_gene_ids = len(gene_ids)
-                
+
             total_ids = len(transcript_ids) + n_gene_ids
             if total_ids == 0:
                 return ensembl_to_uniprot
-            
+
         batch_size = 50000
         for i in range(0, len(transcript_ids), batch_size):
             batch = transcript_ids[i : i + batch_size]
@@ -149,11 +156,13 @@ class ENCODEProcessor:
                     gene_id = result["from"]
                     uniprot_id = result["to"]["primaryAccession"]
                     ensembl_to_uniprot[gene_id] = uniprot_id
-                    
-        if self.ensembl_to_uniprot_pkl and not os.path.exists(self.ensembl_to_uniprot_pkl):
+
+        if self.ensembl_to_uniprot_pkl and not os.path.exists(
+            self.ensembl_to_uniprot_pkl
+        ):
             with open(self.ensembl_to_uniprot_pkl, "wb") as f:
                 pickle.dump(ensembl_to_uniprot, f)
-                
+
         return ensembl_to_uniprot
 
     def process_exp(self, args) -> Optional[List[Dict[str, Any]]]:
@@ -162,16 +171,27 @@ class ENCODEProcessor:
             metadata = json.load(file)
 
         df_output = os.path.join(
-            self.output_dir, f"processed/{metadata['accession']}.parquet"
+            self.output_dir, f"processed_cage/{metadata['accession']}.parquet"
         )
+
+        if os.path.exists(df_output):
+            print(f"Already processed experiment {metadata['accession']}")
+            return
+
         if not os.path.exists(os.path.dirname(df_output)):
             os.makedirs(os.path.dirname(df_output))
 
         annotations = {}
         annotations["cell_slims"] = metadata["biosample_ontology"].get("cell_slims", [])
-        annotations["organ_slims"] = metadata["biosample_ontology"].get("organ_slims", [])
-        annotations["system_slims"] = metadata["biosample_ontology"].get("system_slims", [])
-        annotations["biosample_class"] = metadata["biosample_ontology"].get("classification")
+        annotations["organ_slims"] = metadata["biosample_ontology"].get(
+            "organ_slims", []
+        )
+        annotations["system_slims"] = metadata["biosample_ontology"].get(
+            "system_slims", []
+        )
+        annotations["biosample_class"] = metadata["biosample_ontology"].get(
+            "classification"
+        )
         annotations["assembly"] = metadata.get("assembly")
         annotations["assay"] = metadata.get("assay_title")
 
@@ -181,7 +201,7 @@ class ENCODEProcessor:
                 continue
             bed = BedTool(bed_file)
             peaks = peaks.cat(bed, postmerge=False)
-            
+
         peaks = peaks.slop(b=10000, g=self.chrom_sizes)
         peaks = peaks.sort().merge()
         peak_gene_intersect = peaks.intersect(self.genes_bed, loj=True)
@@ -235,15 +255,5 @@ class ENCODEProcessor:
         df = pd.DataFrame(samples)
         df.to_parquet(df_output)
 
-        #return samples
+        # return samples
         return
-    
-    def process_experiments(self, experiment_files: List[Tuple[List[str], str]], n_workers: Optional[int] = 1) -> None:
-        if n_workers is None:
-            n_workers = multiprocessing.cpu_count()
-        
-        bound_process_exp = partial(self.process_exp)
-        
-        with multiprocessing.Pool(processes=n_workers) as pool:
-            pool.map(bound_process_exp, experiment_files)
-        

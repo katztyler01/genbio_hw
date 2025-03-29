@@ -1,12 +1,12 @@
 from downloader import ENCODEDownloader
 import argparse
 
+
 def main(args):
     downloader = ENCODEDownloader(output_dir=args.output_dir)
 
-    downloader.find_experiments(
-        assay=args.assay, n_experiments=args.n_experiments
-    )
+    downloader.find_experiments(assay=args.assay, n_experiments=args.n_experiments)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download ENCODE data")
