@@ -1,12 +1,13 @@
-import requests
+import gzip
 import json
 import os
-from tqdm import tqdm
-from typing import Optional, Dict
-from pybedtools import BedTool
-import gffutils
-import gzip
 import shutil
+from typing import Any, Dict, List, Optional
+
+import gffutils
+import requests
+from pybedtools import BedTool
+from tqdm import tqdm
 
 ENCODE_BASE_URL = "https://www.encodeproject.org"
 ENCODE_SEARCH_URL = "https://www.encodeproject.org/search/"
@@ -21,7 +22,16 @@ class ENCODEDownloader:
             os.makedirs(output_dir)
         self.assembly = assembly
 
-    def search_encode(self, query_params):
+    def search_encode(self, query_params: Dict[str, Any]) -> Dict:
+        """
+        Uses ENCODE API to search using the provided query parameters.
+
+        Args:
+            query_params (Dict[str, Any]): The query parameters for the search.
+
+        Returns:
+            Dict: The search results in JSON format.
+        """
         headers = {"accept": "application/json"}
         response = requests.get(ENCODE_SEARCH_URL, params=query_params, headers=headers)
 
@@ -34,7 +44,14 @@ class ENCODEDownloader:
 
         return data["@graph"]
 
-    def download_file(self, file_url, file_name):
+    def download_file(self, file_url: str, file_name: str) -> None:
+        """
+        Downloads a file from ENCODE using API.
+
+        Args:
+            file_url (str): The URL of the file to download.
+            file_name (str): The name to save the downloaded file as.
+        """
         with requests.get(file_url, stream=True) as r:
             r.raise_for_status()
             with (
@@ -51,7 +68,14 @@ class ENCODEDownloader:
                     f.write(chunk)
                     progress_bar.update(len(chunk))
 
-    def download_experiment(self, experiment: Dict, assay: str):
+    def download_experiment(self, experiment: Dict, assay: str) -> Optional[List[str]]:
+        """
+        Retreives info about a specific experiment and downloads the relevant files.
+        Args:
+            experiment (Dict): The experiment data from ENCODE API as JSON.
+            assay (str): The type of assay (ATAC-seq, CAGE).
+
+        """
         exp_id = experiment["@id"]
         save_dir = f"{self.output_dir}/experiments/{assay}"
         save_dir = os.path.join(save_dir, experiment["accession"])
@@ -119,7 +143,10 @@ class ENCODEDownloader:
 
         return downloaded_files
 
-    def download_reference_genome(self):
+    def download_reference_genome(self) -> None:
+        """
+        Downloads the reference genome and annotation files for GRCh38 from ENCODE.
+        """
         save_dir = f"{self.output_dir}/genomes"
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -153,7 +180,14 @@ class ENCODEDownloader:
                 with open(fa_file[:-3], "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
 
-    def find_experiments(self, assay: str, n_experiments: Optional[int] = None):
+    def find_experiments(self, assay: str, n_experiments: Optional[int] = None) -> None:
+        """
+        Finds and downloads experiments from ENCODE based on the specified assay type.
+
+        Args:
+            assay (str): The type of assay (ATAC-seq, CAGE).
+            n_experiments (Optional[int]): The number of experiments to download. If None, all experiments will be downloaded.
+        """
         assert assay in ["ATAC-seq", "CAGE"], (
             "Assay must be either 'CAGE' or 'ATAC-seq'"
         )

@@ -1,5 +1,6 @@
-from core.downloader import ENCODEDownloader
 import argparse
+
+from core.downloader import ENCODEDownloader
 
 
 def main(args):

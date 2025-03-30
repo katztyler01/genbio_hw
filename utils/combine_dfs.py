@@ -1,8 +1,9 @@
-import pandas as pd
-import os
-import glob
-from tqdm import tqdm
 import argparse
+import glob
+import os
+
+import pandas as pd
+from tqdm import tqdm
 
 
 def main(args):

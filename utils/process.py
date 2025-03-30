@@ -1,10 +1,11 @@
-import os
-import glob
 import argparse
-from core.processor import ENCODEProcessor
-from typing import List, Tuple, Optional, Any, Dict
+import glob
 import multiprocessing
+import os
 from functools import partial
+from typing import Any, Dict, List, Optional, Tuple
+
+from core.processor import ENCODEProcessor
 
 
 def process_experiment(exp_args, args):

@@ -1,7 +1,8 @@
-from core.processor import ENCODEProcessor
-import os
 import argparse
 import glob
+import os
+
+from core.processor import ENCODEProcessor
 
 
 def main(args):

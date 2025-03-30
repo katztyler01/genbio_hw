@@ -1,6 +1,7 @@
+import argparse
+
 import pandas as pd
 import pysam
-import argparse
 
 
 def load_reference_genome(fasta_file):

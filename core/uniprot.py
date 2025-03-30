@@ -1,11 +1,12 @@
-from xml.etree import ElementTree
 import json
+import re
+import time
+import zlib
+from urllib.parse import parse_qs, urlencode, urlparse
+from xml.etree import ElementTree
+
 import requests
 from requests.adapters import HTTPAdapter, Retry
-import time
-import re
-from urllib.parse import urlparse, parse_qs, urlencode
-import zlib
 
 POLLING_INTERVAL = 3
 UNIPROT_API_URL = "https://rest.uniprot.org"

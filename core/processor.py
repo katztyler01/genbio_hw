@@ -1,16 +1,18 @@
-import gffutils
-import os
-from collections import defaultdict
-from pybedtools import BedTool
-from typing import Dict, List, Tuple, Any, Optional
-from uniprot import UniprotAPI
-import json
 import copy
-import pandas as pd
-from tqdm import tqdm
+import json
 import multiprocessing
-from functools import partial
+import os
 import pickle
+from collections import defaultdict
+from functools import partial
+from typing import Any, Dict, List, Optional, Tuple
+
+import gffutils
+import pandas as pd
+from pybedtools import BedTool
+from tqdm import tqdm
+
+from uniprot import UniprotAPI
 
 
 class ENCODEProcessor:
@@ -24,6 +26,17 @@ class ENCODEProcessor:
         ensembl_to_uniprot: Optional[str] = None,
         assembly: Optional[str] = "GRCh38",
     ) -> None:
+        """
+        Initializes the ENCODEProcessor with the given parameters.
+        Args:
+            output_dir (str): The directory to save the output files.
+            ref_genome (str): The reference genome file.
+            db (str): The database file for gffutils.
+            annotation (str): The annotation file (GTF).
+            chrom_sizes (str): The chromosome sizes file.
+            ensembl_to_uniprot (str, optional): Path to the Ensembl to UniProt mapping pkl file. Defaults to None.
+            assembly (str, optional): Genome assembly version. Defaults to "GRCh38".
+        """
         self.output_dir = output_dir
         self.annotation = annotation
         self.db = db
@@ -48,7 +61,15 @@ class ENCODEProcessor:
 
     def get_gene_db(
         self, gtf_file="encode_data/genomes/GRCh38_v24.gtf.gz", db_file=None
-    ):
+    ) -> gffutils.FeatureDB:
+        """
+        Creates or loads a gffutils database from the provided GTF file.
+        Args:
+            gtf_file (str): Path to the GTF file.
+            db_file (str, optional): Path to the database file. Defaults to None.
+        Returns:
+            gffutils.FeatureDB: The gffutils database object.
+        """
         if db_file is None:
             db_file = ":memory:"
         elif os.path.exists(db_file):
@@ -77,6 +98,13 @@ class ENCODEProcessor:
     def get_transcript_gene_mapping(
         self,
     ) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+        """
+        Creates a mapping of transcript IDs to gene IDs and vice versa.
+        Returns:
+            (Tuple[Dict[str, str], Dict[str, List[str]]]):
+                - transcript_to_gene: Mapping of transcript IDs to gene IDs.
+                - gene_to_transcripts: Mapping of gene IDs to a list of transcript IDs.
+        """
         transcript_to_gene = {}
         gene_to_transcripts = defaultdict(list)
         for transcript in self.gene_db.features_of_type("transcript"):
@@ -92,8 +120,16 @@ class ENCODEProcessor:
         return transcript_to_gene, gene_to_transcripts
 
     def map_ensembl_to_uniprot(
-        self, transcript_ids, gene_ids: Optional[List[str]] = None
-    ):
+        self, transcript_ids: List[str], gene_ids: Optional[List[str]] = None
+    ) -> Dict[str, str]:
+        """
+        Maps Ensembl IDs to UniProt IDs using the UniProt API.
+        Args:
+            transcript_ids (List[str]): List of Ensembl transcript IDs.
+            gene_ids (List[str], optional): List of Ensembl gene IDs. Defaults to None.
+        Returns:
+            ensembl_to_uniprot (Dict[str, str]): Mapping of Ensembl IDs to UniProt IDs.
+        """
         # NOTE: code adapted from UniProt API docs https://www.uniprot.org/help/id_mapping
         uniprot_api = UniprotAPI()
         ensembl_to_uniprot = {}
@@ -168,7 +204,15 @@ class ENCODEProcessor:
 
         return ensembl_to_uniprot
 
-    def process_all_exps(self, bed_files, output, assay):
+    def process_all_exps(self, bed_files: List[str], output: str, assay: str) -> None:
+        """
+        Processes all experiments for a given assay together
+        and saves a combined BED file and Pandas DataFrame as a parquet file.
+        Args:
+            bed_files (List[str]): List of paths to BED files.
+            output (str): Path to save the output parquet file.
+            assay (str): The type of assay (ATAC-seq, CAGE).
+        """
         peaks = BedTool(bed_files[0])
         for i, bed_file in tqdm(
             enumerate(bed_files),
@@ -238,7 +282,12 @@ class ENCODEProcessor:
         df.to_parquet(output)
         return
 
-    def process_exp(self, args) -> Optional[List[Dict[str, Any]]]:
+    def process_exp(self, args: Tuple[List[str], str]) -> None:
+        """
+        Processes a single experiment by extending peaks and merging BED files and saves processed experiment as Pandas DataFrame.
+        Args:
+            args (Tuple[List[str], str]): Tuple containing a list of BED files and the metadata JSON file.
+        """
         bed_files, metadata_file = args
         with open(metadata_file, "r") as file:
             metadata = json.load(file)
