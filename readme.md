@@ -38,3 +38,20 @@ processor.process_exp(("encode_data/experiments/ATAC-seq/ENCSR000RBT/ENCFF246XGY
 
 ```
 
+In `core/dataset.py`, there is an implementation of a PyTorch Dataset to load sequences. The preprocessing steps saved the data to a Pandas DataFrame `merged_exps.parquet` without the actual sequence (just chr#, start, end). This dataset uses `pysam` to load the sequence from the reference genome.
+
+Example Usage:
+
+```
+from core.dataset import ATACCageSeqDataset
+dataset = ATACCageSeqDataset(
+    data_parquet="merged_exps.parquet",
+    ref_genome="encode_data/genomes/GRCh38.fa"
+)
+print(f"Dataset loaded with {len(dataset)} samples")
+seq, assay, uniprot_ids = dataset[6]
+print(f"Sample seq: {seq}")
+print(f"assay: {assay}, uniprot_ids: {uniprot_ids}")
+```
+
+In `utils`, there are few helper scripts to facilitate the downloading and preprocessing. The `download.py` script uses the `ENCODEDownloader` class to download assay data. The `combine_dfs.py` script can be used to combine Pandas DataFrames from individual experiments into one. The `process_all_beds.py` script can be used to process all experimental data from a particular assay togeter (merged) and `process.py` can be used to process experiments of an assay individually. The `get_gc_content.py` script can be used to add GC content (%) to an existing DataFrame by fetching sequences from the reference genome. 
