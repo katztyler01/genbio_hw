@@ -1,2 +1,3 @@
 encode_data/*
 *.pyc
+genbio_hw.egg-info/*

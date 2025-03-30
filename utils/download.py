@@ -1,4 +1,4 @@
-from downloader import ENCODEDownloader
+from core.downloader import ENCODEDownloader
 import argparse
 
 

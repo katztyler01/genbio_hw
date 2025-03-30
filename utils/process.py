@@ -1,9 +1,14 @@
-from processor import ENCODEProcessor
 import os
-import argparse
 import glob
+import argparse
+from core.processor import ENCODEProcessor
+from typing import List, Tuple, Optional, Any, Dict
+import multiprocessing
+from functools import partial
 
-def main(args):
+
+def process_experiment(exp_args, args):
+    bed_files, metadata_json = exp_args
     processor = ENCODEProcessor(
         output_dir=args.output_dir,
         ref_genome=args.ref_genome,
@@ -12,22 +17,40 @@ def main(args):
         chrom_sizes=args.chrom_sizes,
         ensembl_to_uniprot=args.ensembl_to_uniprot,
     )
-    all_bed_files = []
-    for experiment_folder in os.listdir(args.assay_folder):
-        experiment_path = os.path.join(args.assay_folder, experiment_folder)
+    processor.process_exp((bed_files, metadata_json))
+
+
+def main(args):
+    assay_folder = os.path.join(f"{args.output_dir}/experiments", args.assay)
+    experiment_data = []
+    print(f"Finding ENCODE {args.assay} data...")
+    for experiment_folder in os.listdir(assay_folder):
+        experiment_path = os.path.join(assay_folder, experiment_folder)
 
         if not os.path.isdir(experiment_path):
             continue
 
         bed_files = glob.glob(os.path.join(experiment_path, "*.bed"))
+        json_files = glob.glob(os.path.join(experiment_path, "*.json"))
 
-        if bed_files:
-            all_bed_files.extend(bed_files)
-    
-    processor.process_all_exps(bed_files=all_bed_files, output=f"{args.output_dir}/{args.assay}_all.parquet", assay=args.assay)
+        if bed_files and json_files:
+            metadata_json = json_files[0]
+            experiment_data.append((bed_files, metadata_json))
+
+    n_workers = args.n_workers
+    if n_workers is None:
+        n_workers = multiprocessing.cpu_count()
+
+    print(f"Processing {len(experiment_data)} experiments with {n_workers} workers...")
+    process_fn = partial(process_experiment, args=args)
+    with multiprocessing.Pool(processes=n_workers) as pool:
+        pool.map(process_fn, experiment_data)
+
+    print("Processing complete")
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process all experiments for a given assay together.")
+    parser = argparse.ArgumentParser(description="Process ENCODE data.")
     parser.add_argument(
         "--output_dir", type=str, help="encode_data directory", default="encode_data"
     )
@@ -64,11 +87,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--assay", type=str, help="Assay type (ATAC-seq/CAGE)", default="ATAC-seq"
     )
-    parser.add_argument(
-        "--assay_folder",
-        type=str,
-        help="Folder containing the assay data",
-        default="encode_data/experiments/ATAC-seq",
-    )
+    parser.add_argument("--n_workers", type=int, help="Number of workers", default=None)
     args = parser.parse_args()
     main(args)

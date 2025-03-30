@@ -167,14 +167,15 @@ class ENCODEProcessor:
                 pickle.dump(ensembl_to_uniprot, f)
 
         return ensembl_to_uniprot
-    
+
     def process_all_exps(self, bed_files, output, assay):
         peaks = BedTool(bed_files[0])
-        for i, bed_file in tqdm(enumerate(bed_files),
-                                total=len(bed_files),
-                                desc="Processing bed files",
-                                unit="file"
-                                ):
+        for i, bed_file in tqdm(
+            enumerate(bed_files),
+            total=len(bed_files),
+            desc="Processing bed files",
+            unit="file",
+        ):
             if i == 0:
                 continue
             bed = BedTool(bed_file)
@@ -241,12 +242,12 @@ class ENCODEProcessor:
         bed_files, metadata_file = args
         with open(metadata_file, "r") as file:
             metadata = json.load(file)
-            
+
         assay = metadata.get("assay_title")
         if assay is None:
             print(f"Assay title not found in metadata file {metadata_file}")
             return
-        
+
         df_output = os.path.join(
             self.output_dir, f"processed_{assay}/{metadata['accession']}.parquet"
         )

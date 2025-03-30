@@ -15,7 +15,6 @@ ENCODE_FILE_URL = "https://www.encodeproject.org/files/"
 
 class ENCODEDownloader:
     def __init__(self, output_dir: str = "./encode_data", assembly="GRCh38"):
-        
         self.output_dir = output_dir
 
         if not os.path.exists(output_dir):
