@@ -6,7 +6,7 @@
 In `core/downloader.py`, an `ENCODEDownloader` class is defined to utilize real ENCODE API endpoints to search and download relevant files for ATAC-seq and CAGE experiments, as well as a human reference genome and annotation. 
 
 Example Usage:
-```
+```python
 from core.downloader import ENCODEDownloader
 downloader = ENCODEDownloader(
     output_dir="encode_data"
@@ -21,7 +21,7 @@ downloader.find_experiments(
 In `core/processor.py`, a `ENCODEProcessor` class is defined to process downloaded experiment files by extending peaks in either direction by 10 kb and merging them. Then, it finds genes annotated in these regions and utilizes the UniProt API to map Ensembl IDs to UniProt IDs for each isoform found. It saves the experiment as a Pandas DataFrame as a parquet file, where each row is an extended/merged peak region with additional experimental metadata.
 
 Example Usage:
-```
+```python
 from core.processor import ENCODEProcessor
 
 processor = ENCODEProcessor(
@@ -42,7 +42,7 @@ In `core/dataset.py`, there is an implementation of a PyTorch Dataset to load se
 
 Example Usage:
 
-```
+```python
 from core.dataset import ATACCageSeqDataset
 dataset = ATACCageSeqDataset(
     data_parquet="merged_exps.parquet",
