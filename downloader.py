@@ -14,11 +14,13 @@ ENCODE_FILE_URL = "https://www.encodeproject.org/files/"
 
 
 class ENCODEDownloader:
-    def __init__(self, output_dir: str = "./encode_data"):
+    def __init__(self, output_dir: str = "./encode_data", assembly="GRCh38"):
+        
         self.output_dir = output_dir
 
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+        self.assembly = assembly
 
     def search_encode(self, query_params):
         headers = {"accept": "application/json"}
@@ -88,6 +90,9 @@ class ENCODEDownloader:
         else:
             idr_peak = []
             for f in files:
+                assembly = f.get("assembly")
+                if assembly and assembly != self.assembly:
+                    continue
                 if f.get("file_type") in ["bed idr_peak"]:
                     idr_peak.append(f)
             if len(idr_peak) > 0:

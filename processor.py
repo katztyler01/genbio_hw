@@ -7,6 +7,7 @@ from uniprot import UniprotAPI
 import json
 import copy
 import pandas as pd
+from tqdm import tqdm
 import multiprocessing
 from functools import partial
 import pickle
@@ -21,6 +22,7 @@ class ENCODEProcessor:
         annotation: str,
         chrom_sizes: str,
         ensembl_to_uniprot: Optional[str] = None,
+        assembly: Optional[str] = "GRCh38",
     ) -> None:
         self.output_dir = output_dir
         self.annotation = annotation
@@ -28,6 +30,7 @@ class ENCODEProcessor:
         self.annotation = annotation
         self.ref_genome = ref_genome
         self.chrom_sizes = chrom_sizes
+        self.assembly = assembly
 
         self.gene_db = self.get_gene_db(gtf_file=annotation, db_file=db)
 
@@ -164,14 +167,88 @@ class ENCODEProcessor:
                 pickle.dump(ensembl_to_uniprot, f)
 
         return ensembl_to_uniprot
+    
+    def process_all_exps(self, bed_files, output, assay):
+        peaks = BedTool(bed_files[0])
+        for i, bed_file in tqdm(enumerate(bed_files),
+                                total=len(bed_files),
+                                desc="Processing bed files",
+                                unit="file"
+                                ):
+            if i == 0:
+                continue
+            bed = BedTool(bed_file)
+            peaks = peaks.cat(bed)
+
+        peaks = peaks.slop(b=10000, g=self.chrom_sizes)
+        peaks = peaks.sort().merge()
+        peaks.saveas(f"{self.output_dir}/{assay}_all.bed")
+        peak_gene_intersect = peaks.intersect(self.genes_bed, loj=True)
+
+        peak_to_genes = defaultdict(set)
+        all_gene_ids = set()
+
+        for peak in peak_gene_intersect:
+            chrom = peak[0]
+            peak_start = int(peak[1])
+            peak_end = int(peak[2])
+            gene_id = peak[6]
+            if gene_id == ".":
+                continue
+            peak_to_genes[(chrom, peak_start, peak_end)].add(gene_id)
+            all_gene_ids.add(gene_id)
+
+        transcript_ids = set()
+        for gene_id in all_gene_ids:
+            if gene_id in self.gene_to_transcripts:
+                transcript_ids.update(self.gene_to_transcripts[gene_id])
+
+        # ensembl_to_uniprot = self.map_ensembl_to_uniprot(list(transcript_ids), list(all_gene_ids))
+        ensembl_to_uniprot = self.map_ensembl_to_uniprot(list(transcript_ids))
+
+        samples = []
+        for peak_id, gene_ids in peak_to_genes.items():
+            sample = {}
+            sample["chrom"] = peak_id[0]
+            sample["start"] = peak_id[1]
+            sample["end"] = peak_id[2]
+            sample["genes"] = list(gene_ids)
+            sample["assay"] = assay
+            sample["assembly"] = self.assembly
+
+            uniprot_ids = set()
+            for gene_id in gene_ids:
+                stable_gene_id = gene_id.split(".")[0]
+                uniprot_id = ensembl_to_uniprot.get(stable_gene_id)
+                if uniprot_id:
+                    uniprot_ids.add(uniprot_id)
+                if gene_id in self.gene_to_transcripts:
+                    transcript_ids = self.gene_to_transcripts[gene_id]
+                    for transcript_id in transcript_ids:
+                        stable_transcript_id = transcript_id.split(".")[0]
+                        if stable_transcript_id in ensembl_to_uniprot:
+                            uniprot_id = ensembl_to_uniprot[stable_transcript_id]
+                            uniprot_ids.add(uniprot_id)
+
+            sample["uniprot_ids"] = list(uniprot_ids)
+            samples.append(sample)
+
+        df = pd.DataFrame(samples)
+        df.to_parquet(output)
+        return
 
     def process_exp(self, args) -> Optional[List[Dict[str, Any]]]:
         bed_files, metadata_file = args
         with open(metadata_file, "r") as file:
             metadata = json.load(file)
-
+            
+        assay = metadata.get("assay_title")
+        if assay is None:
+            print(f"Assay title not found in metadata file {metadata_file}")
+            return
+        
         df_output = os.path.join(
-            self.output_dir, f"processed_cage/{metadata['accession']}.parquet"
+            self.output_dir, f"processed_{assay}/{metadata['accession']}.parquet"
         )
 
         if os.path.exists(df_output):
@@ -192,8 +269,8 @@ class ENCODEProcessor:
         annotations["biosample_class"] = metadata["biosample_ontology"].get(
             "classification"
         )
-        annotations["assembly"] = metadata.get("assembly")
-        annotations["assay"] = metadata.get("assay_title")
+        annotations["assembly"] = self.assembly
+        annotations["assay"] = assay
 
         peaks = BedTool(bed_files[0])
         for i, bed_file in enumerate(bed_files):
